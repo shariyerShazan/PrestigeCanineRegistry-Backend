@@ -9,6 +9,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../main/prisma/prisma.service';
 
+
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(private prisma: PrismaService) {

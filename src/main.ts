@@ -7,9 +7,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
 
   app.use(
     express.json({
@@ -22,8 +24,15 @@ async function bootstrap() {
     }),
   );
 
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  })
+
+  // app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
+
   // 5. Global Validation Pipe (Fixes Frontend 400 Errors)
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 
   // 4. Cookie Parser
   app.use(cookieParser());

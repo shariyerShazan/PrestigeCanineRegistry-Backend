@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 import { MembershipPlanController } from './membership-plan.controller';
 import { MembershipPlanService } from './membership-plan.service';
-
+import { PrismaService } from '../../../main/prisma/prisma.service';
 import { PermissionService } from '../permission/permission.service';
-import { PrismaService } from '../../prisma/prisma.service';
 import { PermissionGuard } from '../../../guard/permission.guard';
 
 @Module({

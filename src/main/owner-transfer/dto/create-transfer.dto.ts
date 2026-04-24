@@ -11,16 +11,12 @@ import {
 import { Type } from 'class-transformer';
 import { TransferOwnershipStatus } from '../../../../generated/prisma/enums';
 
+// ১. ট্রান্সফার রিকোয়েস্ট তৈরি করার DTO
 export class CreateTransferDto {
   @ApiPropertyOptional({ example: 'canine-uuid-here' })
   @IsOptional()
   @IsUUID()
   canineId?: string;
-
-  @ApiPropertyOptional({ example: 'litter-uuid-here' })
-  @IsOptional()
-  @IsUUID()
-  litterId?: string;
 }
 
 export class ClaimTransferDto {

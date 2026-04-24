@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   Controller,
   Get,
@@ -16,11 +15,11 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BreedService } from './breed.service';
 import { CreateBreedDto, UpdateBreedDto } from './dto/create-breed.dto';
-import { BreedQueryDto } from './dto/BreedQueryDto';
-import { RoleType } from '../../../generated/prisma/enums';
-import { Roles } from '../../decorator/roles.decorator';
-import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 import { RoleGuard } from '../../guard/role.guard';
+import { Roles } from '../../decorator/roles.decorator';
+import { RoleType } from '../../../generated/prisma/enums';
+import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
+import { BreedQueryDto } from './dto/BreedQueryDto';
 
 @ApiTags('Breed Management')
 @ApiBearerAuth()

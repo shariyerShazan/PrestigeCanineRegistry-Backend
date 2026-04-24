@@ -8,18 +8,16 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
-
+import { PrismaService } from '../../main/prisma/prisma.service';
 import { CreateReportDto } from './dto/report.dto';
-
-import { ReportQueryDto } from './dto/report-query.dto';
-import { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from '../../notifications/notifications.service';
 import {
   PriorityLevel,
   ReportStatus,
   ResourceType,
   UserStatus,
 } from '../../../generated/prisma/enums';
+import { ReportQueryDto } from './dto/report-query.dto';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class ReportService {

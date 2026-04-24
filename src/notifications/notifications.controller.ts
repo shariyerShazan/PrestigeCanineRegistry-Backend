@@ -23,15 +23,14 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
-
+import { JwtAuthGuard } from '../guard/jwt.auth.guard';
+import { Roles } from '../decorator/roles.decorator';
+import { RoleGuard } from '../guard/role.guard';
 import {
   QueryNotificationDto,
   MarkSelectedReadDto,
 } from './dto/notification.dto';
 import { RoleType } from '../../generated/prisma/enums';
-import { JwtAuthGuard } from '../guard/jwt.auth.guard';
-import { RoleGuard } from '../guard/role.guard';
-import { Roles } from '../decorator/roles.decorator';
 @ApiTags('Admin / Notifications')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RoleGuard) // Sudhu Admin/SuperAdmin access secure kora holo

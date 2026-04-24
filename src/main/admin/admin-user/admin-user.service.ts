@@ -11,10 +11,9 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { RoleType, UserStatus } from '../../../../generated/prisma/enums';
-
+import { MailService } from '../../../main/mail/mail.service';
+import { PrismaService } from '../../../main/prisma/prisma.service';
 import { CreateUserByAdminDto } from './dto/create-user-by-admin.dto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { MailService } from '../../mail/mail.service';
 
 @Injectable()
 export class AdminUserService {
@@ -172,12 +171,22 @@ export class AdminUserService {
     const where: any = {};
     if (status) where.status = status;
     if (isVerified !== undefined) where.isVerified = isVerified;
-    if (search) {
-      where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { pcrId: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+  if (search) {
+  where.OR = [
+    {
+      fullName: {
+        contains: search,
+        mode: "insensitive",
+      },
+    },
+    {
+      pcrId: {
+        contains: search,
+        mode: "insensitive",
+      },
+    },
+  ];
+}
 
     const [total, users] = await Promise.all([
       this.prisma.user.count({ where }),
