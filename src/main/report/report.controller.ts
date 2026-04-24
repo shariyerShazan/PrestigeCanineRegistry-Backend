@@ -24,12 +24,11 @@ import {
 } from '@nestjs/swagger';
 import { ReportService } from './report.service';
 import { CreateReportDto, UpdateReportStatusDto } from './dto/report.dto';
-
-import { ReportQueryDto } from './dto/report-query.dto';
-import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 import { RoleGuard } from '../../guard/role.guard';
-import { RoleType } from '../../../generated/prisma/enums';
 import { Roles } from '../../decorator/roles.decorator';
+import { RoleType } from '../../../generated/prisma/enums';
+import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
+import { ReportQueryDto } from './dto/report-query.dto';
 
 @ApiTags('Report Management')
 @Controller('reports')
@@ -37,7 +36,6 @@ export class ReportController {
   constructor(private readonly reportService: ReportService) {}
 
   @Post('submit')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Submit a report against a canine or litter' })
   async submit(@Req() req: any, @Body() dto: CreateReportDto) {
     const userId = req.userId || null;

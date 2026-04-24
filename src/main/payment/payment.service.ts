@@ -518,6 +518,7 @@ export class PaymentService {
   async createCertificateSession(
     userId: string,
     dto: CreateCertificateRequestDto,
+    finalAmount: number,
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -542,13 +543,14 @@ export class PaymentService {
         type: 'CERTIFICATE_ORDER',
         canineId: dto.canineId || '',
         litterId: dto.litterId || '',
+        certificateType: dto.certificateType,
       },
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: { name: `Official Certificate Request` },
-            unit_amount: Math.round(finalPrice * 100),
+            unit_amount: finalAmount,
           },
           quantity: 1,
         },
@@ -556,6 +558,40 @@ export class PaymentService {
       mode: 'payment',
       success_url: `${process.env.FRONTEND_URL}/owner/dashboard?success=true`,
       cancel_url: `${process.env.FRONTEND_URL}/owner/dashboard?success=false`,
+    });
+
+    return { url: session.url };
+  }
+
+
+  async createTransferSession(
+    userId: string,
+    transferId: string,
+    finalAmount: number,
+  ) {
+    const session = await this.stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      client_reference_id: userId,
+      metadata: {
+        type: 'TRANSFER_PAYMENT',
+        transferId: transferId, // Vital for the webhook
+      },
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: { 
+              name: `Ownership Transfer Fee`,
+              description: 'Fee for processing canine ownership change'
+            },
+            unit_amount: finalAmount,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/owner/dashboard?transfer=success`,
+      cancel_url: `${process.env.FRONTEND_URL}/owner/dashboard?transfer=cancel`,
     });
 
     return { url: session.url };

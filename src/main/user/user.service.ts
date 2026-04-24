@@ -19,8 +19,8 @@ import { JwtService } from '@nestjs/jwt';
 import { Response } from 'express';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-otp.dto';
-import { NotificationsService } from '../../notifications/notifications.service';
 import { ResourceType } from '../../../generated/prisma/enums';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { GetAmbassadorsDto } from './dto/get-ambassadors.dto';
 
 @Injectable()
@@ -412,6 +412,10 @@ export class UserService {
           roleType: true,
           createdAt: true,
           profileImage: true,
+          state: true,
+          zipCode: true,
+          country: true,
+          city: true,
           membership: {
             select: { name: true, tier: true },
           },

@@ -26,8 +26,8 @@ import {
 } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { ResetPasswordDto } from './dto/reset-otp.dto';
 import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
+import { ResetPasswordDto } from './dto/reset-otp.dto';
 import { GetAmbassadorsDto } from './dto/get-ambassadors.dto';
 
 @ApiTags('Authentication')

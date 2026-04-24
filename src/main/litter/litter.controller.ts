@@ -26,17 +26,16 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { RoleType } from '../../../generated/prisma/enums';
-
+import { Roles } from '../../decorator/roles.decorator';
+import { RoleGuard } from '../../guard/role.guard';
+import { LitterService } from '../litter/litter.service';
+import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 import {
   CreateLitterDto,
   UpdateLitterDto,
 } from '../litter/dto/create-litter.dto';
 import { LitterQueryDto } from './dto/LitterQueryDto';
 import { plainToInstance } from 'class-transformer';
-import { LitterService } from './litter.service';
-import { Roles } from '../../decorator/roles.decorator';
-import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
-import { RoleGuard } from '../../guard/role.guard';
 
 @ApiTags('Litter Management')
 @ApiBearerAuth()

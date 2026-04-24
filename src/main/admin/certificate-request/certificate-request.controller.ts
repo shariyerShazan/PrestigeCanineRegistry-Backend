@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -17,6 +16,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
+import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
+import { PermissionGuard } from '../../../guard/permission.guard';
+import { CheckPermission } from '../../../decorator/CheckPermission.decorator';
 import { ResourceType } from '../../../../generated/prisma/enums';
 import { PermissionAction } from '../permission/permission.service';
 import {
@@ -24,9 +26,6 @@ import {
   CreateCertificateRequestDto,
 } from './dto/certificate-request.dto';
 import { CertificateRequestService } from './certificate-request.service';
-import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
-import { PermissionGuard } from '../../../guard/permission.guard';
-import { CheckPermission } from '../../../decorator/CheckPermission.decorator';
 
 @ApiTags('Certificate Management (User & Admin)')
 @ApiBearerAuth()
@@ -48,6 +47,13 @@ export class CertificateRequestController {
     const userId = req.userId;
     return this.certificateService.getMyRequests(userId);
   }
+
+  @Get('my-single/:id')
+  @ApiOperation({ summary: 'Admin: Get request details by ID' })
+  async getOneForUser(@Param('id', ParseUUIDPipe) id: string) {
+    return this.certificateService.getById(id);
+  }
+
 
   @UseGuards(PermissionGuard)
   @CheckPermission(ResourceType.CERTIFICATE, PermissionAction.VIEW)

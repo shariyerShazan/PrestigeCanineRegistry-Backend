@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -27,11 +26,12 @@ import {
 
 import { PermissionService } from './permission.service';
 import { PermissionDto } from './dto/permission.dto';
-import { PermissionPaginationDto } from './dto/permission-query.dto';
-import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
+import { JwtAuthGuard } from '../../..//guard/jwt.auth.guard';
 import { RoleGuard } from '../../../guard/role.guard';
 import { Roles } from '../../../decorator/roles.decorator';
+
 import { ResourceType, RoleType } from '../../../../generated/prisma/enums';
+import { PermissionPaginationDto } from './dto/permission-query.dto';
 
 @ApiTags('Admin Permission Management')
 @ApiBearerAuth()

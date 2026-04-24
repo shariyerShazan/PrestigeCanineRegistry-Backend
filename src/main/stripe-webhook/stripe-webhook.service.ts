@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
 import {
   Injectable,
   BadRequestException,
@@ -17,6 +18,7 @@ import { SubscriptionStatus } from '../../../generated/prisma/enums';
 import { LitterService } from '../litter/litter.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { CertificateRequestService } from '../admin/certificate-request/certificate-request.service';
+import { OwnershipTransferService } from '../owner-transfer/owner-transfer.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -29,10 +31,20 @@ export class StripeWebhookService {
     private readonly notificationsService: NotificationsService,
     private readonly litterService: LitterService,
     private readonly certService: CertificateRequestService,
+    private readonly transferService: OwnershipTransferService,
   ) {
     this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY')!, {
       apiVersion: '2024-12-18.acacia' as any,
     });
+  }
+
+  // ✅ SAFE PARSER
+  private safeParse(value: any, fallback: any = {}) {
+    try {
+      return value ? JSON.parse(value) : fallback;
+    } catch {
+      return fallback;
+    }
   }
 
   async handleWebhook(signature: string, payload: Buffer) {
@@ -44,6 +56,7 @@ export class StripeWebhookService {
         signature,
         this.configService.get('STRIPE_WEBHOOK_SECRET')!,
       );
+      this.logger.log(`[Webhook] Event Received: ${event.id} [${event.type}]`);
     } catch (err: any) {
       this.logger.error(
         `Webhook signature verification failed: ${err.message}`,
@@ -79,10 +92,12 @@ export class StripeWebhookService {
           break;
 
         default:
-          this.logger.log(`Unhandled event type: ${event.type}`);
+          this.logger.log(`[Webhook] Unhandled event type: ${event.type}`);
       }
     } catch (error: any) {
-      this.logger.error(`Error processing webhook event: ${error.message}`);
+      this.logger.error(
+        `[Webhook] Error processing event ${event.id}: ${error.message}`,
+      );
       throw new InternalServerErrorException('Webhook processing failed');
     }
 
@@ -90,36 +105,59 @@ export class StripeWebhookService {
   }
 
   private async handleCheckoutSession(session: Stripe.Checkout.Session) {
-    const userId = session.client_reference_id;
-    const metadata = session.metadata;
+    const sessionId = session.id;
+    let currentSession = session;
+
+    if (
+      !currentSession.client_reference_id ||
+      !currentSession.metadata ||
+      (currentSession.mode === 'subscription' &&
+        !currentSession.subscription)
+    ) {
+      currentSession = await this.stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['subscription'],
+      });
+    }
+
+    const userId = currentSession.client_reference_id;
+    const metadata = currentSession.metadata || {};
 
     if (!userId) return;
 
-    // 1. Extra Canine Registration Logic
-    if (metadata?.type === 'EXTRA_CANINE_REGISTRATION') {
-      await this.handleExtraCaninePayment(session);
+    if (metadata.type === 'EXTRA_CANINE_REGISTRATION') {
+      await this.handleExtraCaninePayment(currentSession);
       return;
     }
 
-    // 2. Litter Registration Logic
-    if (metadata?.type === 'LITTER_REGISTRATION') {
-      await this.handleLitterPayment(session);
+    if (metadata.type === 'LITTER_REGISTRATION') {
+      await this.handleLitterPayment(currentSession);
       return;
     }
 
-    if (metadata?.type === 'CERTIFICATE_ORDER') {
-      await this.handleCertificatePayment(session);
+    if (metadata.type === 'CERTIFICATE_ORDER') {
+      await this.handleCertificatePayment(currentSession);
       return;
     }
 
-    // 3. Subscription/Membership Logic
-    const membershipId = metadata?.membershipId;
-    const stripeSubId = session.subscription as string;
+    if (metadata.type === 'TRANSFER_PAYMENT') {
+      await this.handleTransferPayment(currentSession);
+      return;
+    }
+
+    const membershipId = metadata.membershipId;
+
+    let stripeSubId: string | null = null;
+    if (typeof currentSession.subscription === 'string') {
+      stripeSubId = currentSession.subscription;
+    } else if (currentSession.subscription) {
+      stripeSubId = (currentSession.subscription as any).id;
+    }
 
     if (!membershipId || !stripeSubId) return;
 
     const subscription: any =
       await this.stripe.subscriptions.retrieve(stripeSubId);
+
     const periodEnd = new Date(subscription.current_period_end * 1000);
 
     await this.prisma.$transaction(async (tx) => {
@@ -131,7 +169,7 @@ export class StripeWebhookService {
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw new Error('User not found');
 
-      let updateData: any = { membershipId: membershipId };
+      let updateData: any = { membershipId };
 
       if (plan.tier === 'PRESTIGE' && user.pcrPrefix !== 'PA') {
         const newPrefix = 'PA';
@@ -149,8 +187,8 @@ export class StripeWebhookService {
         },
         create: {
           stripeSubscriptionId: stripeSubId,
-          userId: userId,
-          membershipId: membershipId,
+          userId,
+          membershipId,
           amountPaid: plan.currentPrice,
           status: SubscriptionStatus.PAID,
           currentPeriodEnd: periodEnd,
@@ -161,17 +199,19 @@ export class StripeWebhookService {
 
   private async handleExtraCaninePayment(session: Stripe.Checkout.Session) {
     const userId = session.client_reference_id;
-    const meta = session.metadata;
-    if (!userId || !meta?.canineData) return;
+    const meta = session.metadata || {};
+    if (!userId || !meta.canineData) return;
 
-    const basic = JSON.parse(meta.canineData);
-    const location = JSON.parse(meta.locationData || '{}');
-    const health = JSON.parse(meta.healthData || '{}');
-    const imageUrls = JSON.parse(meta.imageUrls || '[]');
-    const docUrls = JSON.parse(meta.docUrls || '[]');
+    const basic = this.safeParse(meta.canineData);
+    const location = this.safeParse(meta.locationData);
+    const health = this.safeParse(meta.healthData);
+    const imageUrls = this.safeParse(meta.imageUrls, []);
+    const docUrls = this.safeParse(meta.docUrls, []);
 
     await this.prisma.$transaction(async (tx) => {
-      const breed = await tx.breed.findUnique({ where: { id: basic.breedId } });
+      const breed = await tx.breed.findUnique({
+        where: { id: basic.breedId },
+      });
       if (!breed) throw new Error('Breed not found');
 
       const isDesigner = breed.type === 'DESIGNER';
@@ -184,9 +224,15 @@ export class StripeWebhookService {
         orderBy: { pcrIncremental: 'desc' },
       });
 
-      const nextInc = lastCanine ? parseInt(lastCanine.pcrIncremental) + 1 : 1;
+      const nextInc = lastCanine
+        ? parseInt(lastCanine.pcrIncremental) + 1
+        : 1;
+
       const pcrIncremental = nextInc.toString().padStart(5, '0');
-      const pcrRandom = Math.floor(100000 + Math.random() * 900000).toString();
+      const pcrRandom = Math.floor(
+        100000 + Math.random() * 900000,
+      ).toString();
+
       const pcrId = `PCR-${pcrPrefix}${breed.breedCode}${genPart}-${pcrIncremental}-${pcrRandom}`;
 
       const newCanine = await tx.canine.create({
@@ -201,7 +247,7 @@ export class StripeWebhookService {
           state: location.state,
           country: location.country,
           zipCode: location.zip,
-          generation, // null for purebred, F1 for designer
+          generation,
           pcrId,
           pcrPrefix,
           pcrBreedCode: breed.breedCode,
@@ -216,13 +262,13 @@ export class StripeWebhookService {
           vaccinations: health.vacs,
           healthClearances: health.clear,
           images: {
-            create: imageUrls.map((url) => ({
+            create: imageUrls.map((url: string) => ({
               url,
               publicId: url.split('/').pop(),
             })),
           },
           DNAdocuments: {
-            create: docUrls.map((url) => ({
+            create: docUrls.map((url: string) => ({
               url,
               name: 'DNA Report',
               publicId: url.split('/').pop(),
@@ -236,7 +282,9 @@ export class StripeWebhookService {
           stripeSessionId: session.id,
           userId,
           serviceType: 'CANINE_REG',
-          amount: session.amount_total ? session.amount_total / 100 : 0,
+          amount: session.amount_total
+            ? session.amount_total / 100
+            : 0,
           status: 'PAID',
           resourceId: newCanine.id,
         },
@@ -253,17 +301,16 @@ export class StripeWebhookService {
 
   private async handleLitterPayment(session: Stripe.Checkout.Session) {
     const userId = session.client_reference_id;
-    const meta = session.metadata;
+    const meta = session.metadata || {};
 
-    if (!userId || !meta?.b) return;
+    if (!userId || !meta.b) return;
 
-    const b = JSON.parse(meta.b);
-    const l = JSON.parse(meta.l);
-    const p = JSON.parse(meta.p || '[]');
-    const imgs = JSON.parse(meta.imgs || '[]');
-    const docs = JSON.parse(meta.docs || '[]');
+    const b = this.safeParse(meta.b);
+    const l = this.safeParse(meta.l);
+    const p = this.safeParse(meta.p, []);
+    const imgs = this.safeParse(meta.imgs, []);
+    const docs = this.safeParse(meta.docs, []);
 
-    // Mapping back to DTO structure for the execute function
     const dto = {
       litterName: b.n,
       breedId: b.bid,
@@ -287,32 +334,33 @@ export class StripeWebhookService {
     };
 
     await this.prisma.$transaction(async (tx) => {
-      const breed = await tx.breed.findUnique({ where: { id: dto.breedId } });
+      const breed = await tx.breed.findUnique({
+        where: { id: dto.breedId },
+      });
 
-      // Call the same DB execution logic used in Free registration
       const newLitter = await this.litterService.executeLitterCreation(
         tx,
         userId,
         dto,
-        b.gen, // Generation calculated at session creation
+        b.gen,
         imgs,
         docs,
         breed,
       );
 
-      // Save payment transaction record
       await tx.transaction.create({
         data: {
           stripeSessionId: session.id,
           userId,
           serviceType: 'LITTER_REG',
-          amount: session.amount_total ? session.amount_total / 100 : 0,
+          amount: session.amount_total
+            ? session.amount_total / 100
+            : 0,
           status: 'PAID',
           resourceId: newLitter.id,
         },
       });
 
-      // Alert admins
       await this.notificationsService.alertAdmins({
         title: 'New Litter Paid',
         message: `A new litter "${newLitter.name}" has been registered via Stripe. PcrId: ${newLitter.pcrId}`,
@@ -323,9 +371,10 @@ export class StripeWebhookService {
   }
 
   private async handleFailedPayment(session: any) {
-    // Session metadata theke canineId khuje ber kora (Stripe object structure onujayi)
     const metadata =
-      session.metadata || session.last_payment_error?.payment_method?.metadata;
+      session.metadata ||
+      session.last_payment_error?.payment_method?.metadata;
+
     const canineId = metadata?.canineId;
 
     if (canineId && metadata?.type === 'EXTRA_CANINE_REGISTRATION') {
@@ -333,9 +382,10 @@ export class StripeWebhookService {
         const canine = await this.prisma.canine.findUnique({
           where: { id: canineId },
         });
-        // Shudhu PENDING_PAYMENT holei delete korbo jate active data delete na hoy
+
         if (canine && canine.status === 'PENDING_PAYMENT') {
           await this.prisma.canine.delete({ where: { id: canineId } });
+
           this.logger.warn(
             `Abandoned canine record ${canineId} deleted due to failed payment.`,
           );
@@ -353,48 +403,47 @@ export class StripeWebhookService {
     status: SubscriptionStatus,
   ) {
     if (!subId) return;
+
     await this.prisma.subscription.updateMany({
       where: { stripeSubscriptionId: subId },
-      data: { status: status },
+      data: { status },
     });
   }
 
-  // stripe-webhook.service.ts-er bhitore (puro method)
-
   private async handleCertificatePayment(session: Stripe.Checkout.Session) {
     const userId = session.client_reference_id;
-    const meta = session.metadata;
+    const meta = session.metadata || {};
 
-    if (!userId || !meta) return;
+    if (!userId) return;
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        // Certificate Request record create kora
         const newRequest = await this.certService.executeRequestCreation(
           tx,
           userId,
           {
             canineId: meta.canineId || null,
             litterId: meta.litterId || null,
+            certificateType: meta.certificateType,
           },
         );
 
-        // Payment Transaction record save kora
         await tx.transaction.create({
           data: {
             stripeSessionId: session.id,
             userId,
             serviceType: 'CERTIFICATE',
-            amount: session.amount_total ? session.amount_total / 100 : 0,
+            amount: session.amount_total
+              ? session.amount_total / 100
+              : 0,
             status: 'PAID',
             resourceId: newRequest.id,
           },
         });
 
-        // Admin ke alert dewa
         await this.notificationsService.alertAdmins({
           title: 'New Certificate Request Paid',
-          message: `A user has paid for a certificate request (Id: ${newRequest.requestId}).`,
+          message: `A user has paid for a ${meta.certificateType} request (Id: ${newRequest.requestId}).`,
           category: 'CERTIFICATE',
           sourceId: newRequest.id,
         });
@@ -403,6 +452,48 @@ export class StripeWebhookService {
       this.logger.error(
         `Certificate Payment Processing Failed: ${error.message}`,
       );
+    }
+  }
+
+  private async handleTransferPayment(session: any) {
+    const userId = session.client_reference_id;
+    const meta = session.metadata || {};
+
+    const transferId = meta.transferId;
+    const type = meta.type;
+
+    if (type !== 'TRANSFER_PAYMENT' || !userId || !transferId) return;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.transferService.executeOwnershipChange(
+          tx,
+          transferId,
+          userId,
+        );
+
+        await tx.transaction.create({
+          data: {
+            stripeSessionId: session.id,
+            userId,
+            serviceType: 'TRANSFER',
+            amount: session.amount_total
+              ? session.amount_total / 100
+              : 0,
+            status: 'PAID',
+            resourceId: transferId,
+          },
+        });
+
+        await this.notificationsService.alertAdmins({
+          title: 'Ownership Transfer Paid',
+          message: `Transfer ${transferId} has been paid and processed automatically.`,
+          category: 'TRANSFER_OWNERSHIP',
+          sourceId: transferId,
+        });
+      });
+    } catch (error: any) {
+      this.logger.error(`Transfer Webhook Failed: ${error.message}`);
     }
   }
 }

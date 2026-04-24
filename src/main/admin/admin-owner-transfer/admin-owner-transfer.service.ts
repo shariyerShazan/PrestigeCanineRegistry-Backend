@@ -9,9 +9,9 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { PrismaService } from '../../../main/prisma/prisma.service';
 import { TransferOwnershipStatus } from '../../../../generated/prisma/enums';
 import { TransferQueryDto } from './dto/TransferQueryDto';
-import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AdminOwnerTransferService {
@@ -20,91 +20,84 @@ export class AdminOwnerTransferService {
   constructor(private prisma: PrismaService) {}
 
   // 1. Get All Transfers with Requesters Profile
-  async getAllTransfers(query: TransferQueryDto) {
-    const { page = 1, limit = 10, status, search } = query;
-    const skip = (page - 1) * limit;
+async getAllTransfers(query: TransferQueryDto) {
+  const { page = 1, limit = 10, status, search } = query;
+  const skip = (page - 1) * limit;
 
-    const where: any = {
-      ...(status && { status }),
-      ...(search && {
-        OR: [
-          { transferCode: { contains: search, mode: 'insensitive' } },
-          {
-            currentOwner: {
-              fullName: { contains: search, mode: 'insensitive' },
-            },
-          },
-          { canine: { name: { contains: search, mode: 'insensitive' } } },
-        ],
-      }),
-    };
+  const where: any = {
+    ...(status && { status }),
+    ...(search && {
+      OR: [
+        { transferCode: { contains: search, mode: 'insensitive' } },
+        { currentOwner: { fullName: { contains: search, mode: 'insensitive' } } },
+        { canine: { name: { contains: search, mode: 'insensitive' } } },
+        { litter: { name: { contains: search, mode: 'insensitive' } } },
+      ],
+    }),
+  };
 
-    const [rawTransfers, total] = await Promise.all([
-      this.prisma.ownershipTransfer.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          canine: { select: { id: true, name: true, pcrId: true } },
-          litter: { select: { id: true, name: true, pcrId: true } },
-          currentOwner: {
-            select: { fullName: true, email: true, pcrId: true },
-          },
-          newOwner: { select: { fullName: true, email: true, pcrId: true } },
-          requests: {
-            include: {
-              user: {
-                select: { id: true, fullName: true, email: true, pcrId: true },
-              },
-            },
-          },
-        },
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.ownershipTransfer.count({ where }),
-    ]);
-    const data = rawTransfers.map((transfer) => ({
-      ...transfer,
-      requesters: transfer.requests.map((r) => ({
-        ...r.user,
-        isAccepted: r.isAccepted,
-      })),
-    }));
-
-    return {
-      data,
-      meta: { total, page, lastPage: Math.ceil(total / limit) },
-    };
-  }
-  // 2. Get Single Transfer with Full Requester List
-  async getTransferById(id: string) {
-    const transfer = await this.prisma.ownershipTransfer.findUnique({
-      where: { id },
+  const [rawTransfers, total] = await Promise.all([
+    this.prisma.ownershipTransfer.findMany({
+      where,
+      skip,
+      take: limit,
       include: {
-        canine: true,
-        litter: true,
-        currentOwner: { select: { fullName: true, email: true, pcrId: true } },
-        newOwner: { select: { fullName: true, email: true, pcrId: true } },
+        canine: { select: { id: true, name: true, pcrId: true } },
+        litter: { select: { id: true, name: true, pcrId: true } },
+        currentOwner: { select: { id: true, fullName: true, email: true, pcrId: true } },
+        newOwner: { select: { id: true, fullName: true, email: true, pcrId: true } },
         requests: {
           include: {
-            user: {
-              select: { id: true, fullName: true, email: true, pcrId: true },
-            },
+            user: { select: { id: true, fullName: true, email: true, pcrId: true } },
           },
         },
       },
-    });
+      orderBy: { createdAt: 'desc' },
+    }),
+    this.prisma.ownershipTransfer.count({ where }),
+  ]);
 
-    if (!transfer) throw new NotFoundException('Transfer request not found');
+  const data = rawTransfers.map((transfer) => ({
+    ...transfer,
+    requesters: transfer.requests.map((r) => ({
+      ...r.user,
+      isAccepted: r.isAccepted,
+      status: r.isAccepted ? 'ACCEPTED' : (transfer.status === 'APPROVE' ? 'DECLINED' : 'PENDING'),
+    })),
+  }));
 
-    return {
-      ...transfer,
-      requesters: transfer.requests.map((r) => ({
-        ...r.user,
-        isAccepted: r.isAccepted,
-      })),
-    };
-  }
+  return {
+    data,
+    meta: { total, page, lastPage: Math.ceil(total / limit) },
+  };
+}
+  // 2. Get Single Transfer with Full Requester List
+async getTransferById(id: string) {
+  const transfer = await this.prisma.ownershipTransfer.findUnique({
+    where: { id },
+    include: {
+      canine: true,
+      litter: true,
+      currentOwner: { select: { fullName: true, email: true, pcrId: true } },
+      newOwner: { select: { fullName: true, email: true, pcrId: true } },
+      requests: {
+        include: {
+          user: { select: { id: true, fullName: true, email: true, pcrId: true } },
+        },
+      },
+    },
+  });
+
+  if (!transfer) throw new NotFoundException('Transfer record not found');
+
+  return {
+    ...transfer,
+    requesters: transfer.requests.map((r) => ({
+      ...r.user,
+      isAccepted: r.isAccepted,
+    })),
+  };
+}
 
   async approveTransfer(id: string, selectedUserId: string) {
     const transfer = await this.prisma.ownershipTransfer.findUnique({

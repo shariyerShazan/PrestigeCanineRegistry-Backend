@@ -30,6 +30,7 @@ import { AdminLitterModule } from './main/admin/admin-litter/admin-litter.module
 import { AdminOwnerTransferModule } from './main/admin/admin-owner-transfer/admin-owner-transfer.module';
 import { CertificateRequestModule } from './main/admin/certificate-request/certificate-request.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { BreederProgramModule } from './main/breeder-program/breeder-program.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -60,6 +61,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AdminOwnerTransferModule,
     CertificateRequestModule,
     NotificationsModule,
+    BreederProgramModule,
   ],
   controllers: [AppController],
   providers: [

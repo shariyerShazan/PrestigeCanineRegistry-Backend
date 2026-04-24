@@ -6,10 +6,7 @@ import {
   IsOptional,
   IsUUID,
 } from 'class-validator';
-import {
-  PriorityLevel,
-  ReportStatus,
-} from '../../../../generated/prisma/enums';
+import { PriorityLevel, ReportStatus } from '../../../../generated/prisma/enums';
 
 export class CreateReportDto {
   @ApiProperty({ example: 'Incorrect DNA Info' })
