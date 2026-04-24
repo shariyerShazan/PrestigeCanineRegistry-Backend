@@ -9,8 +9,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
-  PermissionAction,
   PermissionService,
+  PermissionAction,
 } from '../main/admin/permission/permission.service';
 import { PrismaService } from '../main/prisma/prisma.service';
 import { ResourceType } from '../../generated/prisma/enums';

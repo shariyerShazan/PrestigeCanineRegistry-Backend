@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -27,8 +26,8 @@ import {
 import { CanineService } from './canine.service';
 import { RegisterCanineDto, UpdateCanineDto } from './dto/create-canine.dto';
 import { CanineQueryDto } from './dto/canine-query.dto';
-import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 import { RoleGuard } from '../../guard/role.guard';
+import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 
 @ApiTags('Canine Management')
 @ApiBearerAuth()

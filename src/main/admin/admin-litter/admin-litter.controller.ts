@@ -13,16 +13,15 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminLitterService } from './admin-litter.service';
-
+import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
+import { PermissionGuard } from '../../../guard/permission.guard';
+import { CheckPermission } from '../../../decorator/CheckPermission.decorator';
 import { ResourceType } from '../../../../generated/prisma/enums';
 import { PermissionAction } from '../permission/permission.service';
 import {
   AdminLitterQueryDto,
   UpdateLitterAdminDto,
 } from './dto/admin-litter.dto';
-import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
-import { PermissionGuard } from '../../../guard/permission.guard';
-import { CheckPermission } from '../../../decorator/CheckPermission.decorator';
 
 @ApiTags('Admin / Litter Management')
 @ApiBearerAuth()

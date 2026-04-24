@@ -7,8 +7,6 @@ import {
   IsDateString,
   IsNotEmpty,
   IsArray,
-  IsNumberString,
-  Length,
 } from 'class-validator';
 import {
   Gender,
@@ -49,14 +47,10 @@ export class RegisterCanineDto {
 
   // Generation removed as per instruction for individual registration
 
-  @ApiPropertyOptional({
-    example: '123456789012345',
-    description: '15-digit microchip identification number',
-  })
-  @IsOptional()
-  @IsNumberString({}, { message: 'Microchip ID must contain only numbers' })
-  @Length(15, 15, { message: 'Microchip ID must be exactly 15 digits long' })
-  microchipId?: string;
+  @ApiProperty({ example: '900123456789' })
+  @IsString()
+  @IsNotEmpty()
+  microchipId!: string;
 
   @ApiProperty({ example: 'German Shepherd' })
   @IsNotEmpty()

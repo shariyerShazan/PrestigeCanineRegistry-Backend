@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -8,15 +10,12 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { PrismaService } from '../../../main/prisma/prisma.service';
 import {
   CreateMembershipDto,
   UpdateMembershipDto,
 } from './dto/create-membership-plan.dto';
-import { PrismaService } from '../../prisma/prisma.service';
-import {
-  ServiceType,
-  SubscriptionStatus,
-} from '../../../../generated/prisma/enums';
+import { ServiceType, SubscriptionStatus } from '../../../../generated/prisma/enums';
 
 @Injectable()
 export class MembershipPlanService {

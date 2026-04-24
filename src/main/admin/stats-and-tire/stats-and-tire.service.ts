@@ -1,11 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 
+import { PrismaService } from '../../../main/prisma/prisma.service';
 import { UpdateRegistryTierDto } from './dto/assign-tire.dto';
-import { PrismaService } from '../../prisma/prisma.service';
 import { RegistryTier } from '../../../../generated/prisma/enums';
 
 @Injectable()

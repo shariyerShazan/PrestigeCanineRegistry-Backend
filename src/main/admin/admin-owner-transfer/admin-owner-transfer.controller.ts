@@ -17,12 +17,12 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { AdminOwnerTransferService } from './admin-owner-transfer.service';
-import { ResourceType } from '../../../../generated/prisma/enums';
-import { PermissionAction } from '../permission/permission.service';
-import { TransferQueryDto } from './dto/TransferQueryDto';
 import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
 import { PermissionGuard } from '../../../guard/permission.guard';
 import { CheckPermission } from '../../../decorator/CheckPermission.decorator';
+import { ResourceType } from '../../../../generated/prisma/enums';
+import { PermissionAction } from '../permission/permission.service';
+import { TransferQueryDto } from './dto/TransferQueryDto';
 
 @ApiTags('Admin / Ownership Transfer Management')
 @ApiBearerAuth()
