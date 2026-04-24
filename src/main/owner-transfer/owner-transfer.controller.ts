@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -19,12 +18,12 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { OwnershipTransferService } from './owner-transfer.service';
+import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 import {
   ClaimTransferDto,
   CreateTransferDto,
   TransferQueryDto,
 } from './dto/create-transfer.dto';
-import { JwtAuthGuard } from '../../guard/jwt.auth.guard';
 import { RoleGuard } from '../../guard/role.guard';
 import { Roles } from '../../decorator/roles.decorator';
 import { RoleType } from '../../../generated/prisma/enums';

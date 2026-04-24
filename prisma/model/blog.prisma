@@ -1,0 +1,92 @@
+model BreederProgram {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  programName        String   // e.g., 'Pawhalla Kennels'
+  bannerUrl          String?
+  location           String?  // e.g., 'Dallas, TX'
+  website            String?
+  
+  aboutIntro         String?  @db.Text
+  aboutPoints        String[] @default([]) // বুলেটের জন্য অ্যারে
+  aboutOutro         String?  @db.Text
+
+  // --- Breeding Philosophy ---
+  philosophyIntro    String?  @db.Text
+  philosophyPoints   String[] @default([])
+  philosophyOutro    String?  @db.Text
+
+  // --- Goals ---
+  goalsIntro         String?  @db.Text
+  goalsPoints        String[] @default([])
+  goalsOutro         String?  @db.Text
+
+  // --- Litter Practices ---
+  litterIntro        String?  @db.Text
+  litterPoints       String[] @default([])
+  litterOutro        String?  @db.Text
+
+  // --- Screening Process ---
+  screeningIntro     String?  @db.Text
+  screeningPoints    String[] @default([])
+  screeningOutro     String?  @db.Text
+
+  blogLitters        BlogLitter[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("breeder_programs")
+}
+
+model BlogLitter {
+  id                String   @id @default(uuid())
+  
+  ownerId           String
+  owner             User     @relation("UserBlogLitters", fields: [ownerId], references: [id])
+
+  breederProgramId  String?
+  breederProgram    BreederProgram? @relation(fields: [breederProgramId], references: [id], onDelete: SetNull)
+
+  sireId            String
+  sire              Canine   @relation("BlogSireRelation", fields: [sireId], references: [id])
+  damId             String
+  dam               Canine   @relation("BlogDamRelation", fields: [damId], references: [id])
+
+  litterSize        Int      @default(0)
+  
+  breedId           String
+  breedRelation     Breed    @relation(fields: [breedId], references: [id])
+  tier              BlogTier   // e.g., 'GOLD' or 'BLUE'
+  images    BlogLitterImage[]
+  isComing          Boolean  @default(false)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("blog_litters")
+}
+
+
+model BlogLitterImage {
+  id        String   @id @default(uuid())
+
+  url       String
+  publicId  String
+
+  isPrimary Boolean  @default(false)
+
+  litterId  String
+  litter    BlogLitter @relation(fields: [litterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([litterId])
+  @@map("blog_litter_images")
+}
+
+enum BlogTier {
+  GOLD
+  BLUE
+}

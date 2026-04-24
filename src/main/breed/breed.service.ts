@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -9,10 +7,9 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-
+import { PrismaService } from '../../main/prisma/prisma.service';
 import { CreateBreedDto, UpdateBreedDto } from './dto/create-breed.dto';
 import { BreedQueryDto } from './dto/BreedQueryDto';
-import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class BreedService {

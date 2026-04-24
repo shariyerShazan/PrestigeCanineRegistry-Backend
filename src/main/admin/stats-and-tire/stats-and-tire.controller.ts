@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   Controller,
   Patch,
@@ -15,13 +14,13 @@ import {
 } from '@nestjs/swagger';
 import { StatsAndTireService } from './stats-and-tire.service';
 import { UpdateRegistryTierDto } from './dto/assign-tire.dto';
-
-import { PermissionAction } from '../permission/permission.service';
 import { JwtAuthGuard } from '../../../guard/jwt.auth.guard';
-import { PermissionGuard } from '../../../guard/permission.guard';
-import { ResourceType, RoleType } from '../../../../generated/prisma/enums';
+// import { RoleGuard } from 'src/guard/role.guard';
 import { Roles } from '../../../decorator/roles.decorator';
-import { CheckPermission } from '../../../decorator/CheckPermission.decorator';
+import { ResourceType, RoleType } from '../../../../generated/prisma/enums';
+import { PermissionGuard } from '../../../guard/permission.guard';
+import { CheckPermission } from '../../..//decorator/CheckPermission.decorator';
+import { PermissionAction } from '../permission/permission.service';
 
 @ApiTags('Admin - Registry Management')
 @ApiBearerAuth()

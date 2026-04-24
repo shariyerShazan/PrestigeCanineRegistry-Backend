@@ -6,7 +6,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
-import { CertificateRequestStatus } from '../../../../../generated/prisma/enums';
+import { CertificateRequestStatus, CertificateType } from '../../../../../generated/prisma/enums';
 
 export class CreateCertificateRequestDto {
   @ApiProperty({ example: 'canine-uuid-here', required: false })
@@ -19,13 +19,14 @@ export class CreateCertificateRequestDto {
   @IsOptional()
   litterId?: string;
 
-  @ApiProperty({
-    example: 'Need this for the upcoming dog show.',
-    required: false,
+@ApiProperty({
+    enum: CertificateType,
+    example: CertificateType.CERTIFICATE,
+    required: true,
+    description: 'Type of the certificate (CERTIFICATE or PEDIGREE)'
   })
-  @IsString()
-  @IsOptional()
-  note?: string;
+  @IsEnum(CertificateType)
+  certificateType!: CertificateType;
 }
 
 export class CertificateQueryDto {

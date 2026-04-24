@@ -9,6 +9,9 @@ model Breed {
   
   canines          Canine[]
   litters          Litter[]
+  
+  blogLitters        BlogLitter[]
+  
   @@map("breeds")
 }
 

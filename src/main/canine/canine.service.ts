@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -13,13 +12,13 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { PrismaService } from '../../main/prisma/prisma.service';
+import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RegisterCanineDto, UpdateCanineDto } from './dto/create-canine.dto';
 import { CanineQueryDto } from './dto/canine-query.dto';
 // import { RegistryTier, ResourceType } from 'generated/prisma/enums';
-import { PaymentService } from '../payment/payment.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class CanineService {
@@ -31,21 +30,6 @@ export class CanineService {
     private notificationsService: NotificationsService,
     private readonly paymentService: PaymentService,
   ) {}
-
-  private async getNextPcrId(
-    kind: string,
-    prefix: string,
-    breedCode: string,
-  ): Promise<string> {
-    const sequence = await this.prisma.pcrSequence.upsert({
-      where: {
-        kind_prefix_breedCode: { kind, prefix, breedCode },
-      },
-      update: { lastValue: { increment: 1 } },
-      create: { kind, prefix, breedCode, lastValue: 1 },
-    });
-    return sequence.lastValue.toString().padStart(5, '0');
-  }
 
   // 1. Register Canine
   async registerCanine(
@@ -84,63 +68,17 @@ export class CanineService {
       );
     }
 
-    const isDesigner = breed.type === 'DESIGNER';
+    // PCR ID Logic (No Generation for Individual Reg)
+    const pcrPrefix = breed.type === 'DESIGNER' ? 'G' : 'B';
+    const lastCanine = await this.prisma.canine.findFirst({
+      where: { pcrPrefix, pcrBreedCode: breed.breedCode },
+      orderBy: { pcrIncremental: 'desc' },
+    });
 
-    // DNA Validation
-    if (dto.primaryBreedDNA) {
-      const primaryPercentage = parseFloat(
-        String(dto.primaryBreedDNA).replace(/[^0-9.]/g, ''),
-      );
-      if (isNaN(primaryPercentage)) {
-        throw new BadRequestException(
-          'Primary Breed DNA must contain a valid numerical percentage.',
-        );
-      }
-
-      if (!isDesigner) {
-        if (primaryPercentage < 90) {
-          throw new BadRequestException(
-            'Purebred registration requires >=90% primary breed DNA.',
-          );
-        }
-      } else {
-        const secondaryPercentage = parseFloat(
-          String(dto.secondaryBreedDNA || '0').replace(/[^0-9.]/g, ''),
-        );
-        if (isNaN(secondaryPercentage)) {
-          throw new BadRequestException(
-            'Secondary Breed DNA must contain a valid numerical percentage for designers.',
-          );
-        }
-        if (
-          primaryPercentage < 40 ||
-          primaryPercentage > 60 ||
-          secondaryPercentage < 40 ||
-          secondaryPercentage > 60
-        ) {
-          throw new BadRequestException(
-            'F1 Designer registration requires a 40%-60% distribution between two breeds.',
-          );
-        }
-        if (primaryPercentage + secondaryPercentage < 90) {
-          throw new BadRequestException(
-            'Combined primary and secondary DNA must be >= 90% for F1 Designers.',
-          );
-        }
-      }
-    }
-
-    const pcrPrefix = isDesigner ? 'B' : 'G';
-    const generation = isDesigner ? 'F1' : null;
-    const genPart = generation ? `-${generation}` : '';
-
-    const pcrIncremental = await this.getNextPcrId(
-      'CANINE',
-      pcrPrefix,
-      breed.breedCode,
-    );
+    const nextInc = lastCanine ? parseInt(lastCanine.pcrIncremental) + 1 : 1;
+    const pcrIncremental = nextInc.toString().padStart(5, '0');
     const pcrRandom = Math.floor(100000 + Math.random() * 900000).toString();
-    const pcrId = `PCR-${pcrPrefix}${breed.breedCode}${genPart}-${pcrIncremental}-${pcrRandom}`;
+    const pcrId = `PCR-${pcrPrefix}${breed.breedCode}-${pcrIncremental}-${pcrRandom}`;
 
     return await this.prisma.$transaction(async (tx) => {
       const existing = await tx.canine.findUnique({
@@ -151,13 +89,13 @@ export class CanineService {
       const canine = await tx.canine.create({
         data: {
           ...dto,
-          generation, // Automatically F1 for Designers, null for Purebreds
+          generation: null, // Strictly null for main registration
           pcrId,
           pcrPrefix,
           pcrBreedCode: breed.breedCode,
           pcrIncremental,
           pcrRandom,
-          tier: isDesigner ? 'BLUE' : 'GOLD',
+          tier: pcrPrefix === 'G' ? 'GOLD' : 'BLUE',
           ownerId: userId,
           dateOfBirth: new Date(dto.dateOfBirth),
           images: {

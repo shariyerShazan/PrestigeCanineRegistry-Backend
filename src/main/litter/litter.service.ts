@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -14,13 +13,14 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { PrismaService } from '../../main/prisma/prisma.service';
+// import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
 import { CreateLitterDto, UpdateLitterDto } from './dto/create-litter.dto';
-import { LitterQueryDto } from './dto/LitterQueryDto';
-
-import { PaymentService } from '../payment/payment.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
+import { LitterQueryDto } from './dto/LitterQueryDto';
+// import { RegistryTier, ResourceType } from 'generated/prisma/enums';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class LitterService {
@@ -33,103 +33,48 @@ export class LitterService {
     private readonly paymentService: PaymentService,
   ) {}
 
-  private async getNextPcrId(
-    kind: string,
-    prefix: string,
-    breedCode: string,
-  ): Promise<string> {
-    const sequence = await this.prisma.pcrSequence.upsert({
-      where: { kind_prefix_breedCode: { kind, prefix, breedCode } },
-      update: { lastValue: { increment: 1 } },
-      create: { kind, prefix, breedCode, lastValue: 1 },
-    });
-    return sequence.lastValue.toString().padStart(5, '0');
-  }
-
-  private async getNextPcrIdMany(
-    kind: string,
-    prefix: string,
-    breedCode: string,
-    count: number,
-  ): Promise<string[]> {
-    if (count <= 0) return [];
-    const sequence = await this.prisma.pcrSequence.upsert({
-      where: { kind_prefix_breedCode: { kind, prefix, breedCode } },
-      update: { lastValue: { increment: count } },
-      create: { kind, prefix, breedCode, lastValue: count },
-    });
-
-    const startValue = sequence.lastValue - count + 1;
-    const ids: string[] = [];
-    for (let i = 0; i < count; i++) {
-      ids.push((startValue + i).toString().padStart(5, '0'));
-    }
-    return ids;
-  }
-
   private async calculateGeneration(
     motherId?: string,
     fatherId?: string,
-  ): Promise<string | null> {
-    if (!motherId || !fatherId) {
-      throw new BadRequestException(
-        'Both parents must be provided for Litter linkage. If parents are unverified, please register pups individually.',
-      );
-    }
+  ): Promise<string> {
+    // Jodi kono ekjon parent na thake, default F1 (Individual registration logic er moto)
+    // if (!motherId || !fatherId) return 'F1';
 
     const [mother, father] = await Promise.all([
       this.prisma.canine.findUnique({ where: { pcrId: motherId } }),
       this.prisma.canine.findUnique({ where: { pcrId: fatherId } }),
     ]);
 
-    if (!mother || !father) {
+    if (!mother)
       throw new BadRequestException(
-        'Both parents must be PCR registered, DNA verified, and microchipped. If not, pups must register individually.',
+        `Mother PCR ID ${motherId} not found in our registry.`,
       );
-    }
-
-    // Verification Check: Dam and sire must both be thoroughly verified
-    if (
-      mother.status !== 'APPROVED' ||
-      father.status !== 'APPROVED' ||
-      !mother.microchipId ||
-      !father.microchipId
-    ) {
+    if (!father)
       throw new BadRequestException(
-        'Both parents must be fully verified (PCR registered, DNA verified, and microchipped). If not, please register pups individually.',
+        `Father PCR ID ${fatherId} not found in our registry.`,
       );
+
+    // 1. Both Pure Breed (Generation is null) => Result: F1
+    if (!mother?.generation && !father?.generation) {
+      return 'F1';
     }
 
-    // 1. Both Purebred
-    if (!mother.generation && !father.generation) {
-      if (mother.breedId === father.breedId) {
-        return null; // Purebred
-      } else {
-        return 'F1'; // F1 Designer
-      }
-    }
-
-    // 2. F1 x F1
-    if (mother.generation === 'F1' && father.generation === 'F1') {
-      if (mother.breedId === father.breedId) {
-        return 'F2';
-      } else {
-        return 'VD'; // Different designer pairings result in VD
-      }
-    }
-
-    // 3. F1 x Purebred -> F1B
+    // 2. One is F1 and other is Pure Breed => Result: F1B
     if (
-      (mother.generation === 'F1' && !father.generation) ||
-      (!mother.generation && father.generation === 'F1')
+      (mother?.generation === 'F1' && !father?.generation) ||
+      (!mother?.generation && father?.generation === 'F1')
     ) {
       return 'F1B';
     }
 
-    // 4. Beyond F2 and F1B (Verified Designer Lineage)
-    return 'VD';
-  }
+    // 3. Both are F1 => Result: F2
+    if (mother?.generation === 'F1' && father?.generation === 'F1') {
+      return 'F2';
+    }
 
+    // 4. Default fallback for higher generations
+    return 'F1';
+  }
   async createLitter(
     userId: string,
     dto: CreateLitterDto,
@@ -208,7 +153,7 @@ export class LitterService {
     tx: any,
     userId: string,
     dto: any,
-    gen: string | null,
+    gen: string,
     imageUrls: string[],
     docUrls: string[],
     breed: any,
@@ -216,25 +161,25 @@ export class LitterService {
     const pcrPrefix = 'L';
     const pcrBreedCode = breed.breedCode;
 
-    // Incremental logic using atomic sequence
-    const pcrIncremental = await this.getNextPcrId(
-      'LITTER',
-      pcrPrefix,
-      pcrBreedCode,
-    );
+    // Incremental logic
+    const lastLitter = await tx.litter.findFirst({
+      where: { pcrPrefix, pcrBreedCode },
+      orderBy: { pcrIncremental: 'desc' },
+    });
+    const nextInc = lastLitter ? parseInt(lastLitter.pcrIncremental) + 1 : 1;
+    const pcrIncremental = nextInc.toString().padStart(5, '0');
     const pcrRandom = Math.floor(100000 + Math.random() * 900000).toString();
-    const genPart = gen ? `-${gen}` : '';
 
     // Create Parent Litter Record
     const litter = await tx.litter.create({
       data: {
-        pcrId: `PCR-${pcrPrefix}${pcrBreedCode}${genPart}-${pcrIncremental}-${pcrRandom}`,
+        pcrId: `PCR-${pcrPrefix}${pcrBreedCode}-${gen}-${pcrIncremental}-${pcrRandom}`,
         pcrPrefix,
         pcrBreedCode,
         generation: gen,
         pcrIncremental,
         pcrRandom,
-        tier: breed.type === 'DESIGNER' ? 'BLUE' : 'GOLD',
+        tier: breed.type === 'DESIGNER' ? 'GOLD' : 'BLUE',
         name: dto.litterName,
         breedId: dto.breedId,
         dateOfBirth: new Date(dto.dateOfBirth),
@@ -263,85 +208,53 @@ export class LitterService {
       },
     });
 
-    // Create Puppies efficiently using createMany
-    if (dto.puppies && Array.isArray(dto.puppies) && dto.puppies.length > 0) {
-      const pupPrefix = breed.type === 'DESIGNER' ? 'B' : 'G';
-      const pupCount = dto.puppies.length;
-
-      // Get all puppy sequence numbers in one query
-      const pupIncs = await this.getNextPcrIdMany(
-        'CANINE',
-        pupPrefix,
-        pcrBreedCode,
-        pupCount,
-      );
-
-      const puppiesData: any[] = [];
-      const imageRecords: any[] = [];
-      const dnaRecords: any[] = [];
-
-      // Import uuid or use random manually. We will use a random 32 char hex if uuid is unavailable, but usually crypto.randomUUID is best.
-      // Prisma `createMany` allows explicit IDs, so we generate them to map images.
-      const { v4: uuidv4 } = require('uuid');
-
+    // Create Puppies Loop
+    if (dto.puppies && Array.isArray(dto.puppies)) {
       for (const [idx, pup] of dto.puppies.entries()) {
-        const pupId = uuidv4();
-        const pupInc = pupIncs[idx];
+        const pupPrefix = breed.type === 'DESIGNER' ? 'G' : 'B';
+        const pupInc = (nextInc + idx).toString().padStart(5, '0');
         const pupRand = Math.floor(100000 + Math.random() * 900000).toString();
-        const pupPcrId = `PCR-${pupPrefix}${pcrBreedCode}${genPart}-${pupInc}-${pupRand}`;
 
-        puppiesData.push({
-          id: pupId,
-          pcrId: pupPcrId,
-          pcrPrefix: pupPrefix,
-          pcrBreedCode: pcrBreedCode,
-          pcrIncremental: pupInc,
-          pcrRandom: pupRand,
-          generation: gen,
-          name: pup.name,
-          gender: pup.gender,
-          color: pup.color,
-          weight: Number(pup.weight),
-          microchipId: pup.microchipId,
-          dateOfBirth: new Date(dto.dateOfBirth),
-          ownerId: userId,
-          breedId: dto.breedId,
-          litterId: litter.id,
-          tier: pupPrefix === 'G' ? 'GOLD' : 'BLUE',
-          city: dto.city,
-          state: dto.state,
-          country: dto.country,
-          zipCode: dto.zipCode,
-          healthStatus: pup.healthStatus || 'EXCELLENT',
-          vaccinations: pup.vaccinations || [],
-          healthClearances: pup.healthClearances || [],
+        await tx.canine.create({
+          data: {
+            pcrId: `PCR-${pupPrefix}${pcrBreedCode}-${gen}-${pupInc}-${pupRand}`,
+            pcrPrefix: pupPrefix,
+            pcrBreedCode: pcrBreedCode,
+            pcrIncremental: pupInc,
+            pcrRandom: pupRand,
+            generation: gen,
+            name: pup.name,
+            gender: pup.gender,
+            color: pup.color,
+            weight: Number(pup.weight),
+            microchipId: pup.microchipId,
+            dateOfBirth: new Date(dto.dateOfBirth),
+            ownerId: userId,
+            breedId: dto.breedId,
+            litterId: litter.id, // Linking pup to litter
+            tier: pupPrefix === 'G' ? 'GOLD' : 'BLUE',
+            city: dto.city,
+            state: dto.state,
+            country: dto.country,
+            zipCode: dto.zipCode,
+            healthStatus: pup.healthStatus || 'EXCELLENT',
+            vaccinations: pup.vaccinations || [], // Array string handle korbe
+            healthClearances: pup.healthClearances || [],
+            DNAdocuments: {
+              create: docUrls.map((url) => ({
+                url,
+                name: `${pup.name} DNA Record`,
+                publicId: url.split('/').pop(),
+              })),
+            },
+            images: {
+              create: imageUrls.map((url) => ({
+                url,
+                publicId: url.split('/').pop(),
+              })),
+            },
+          },
         });
-
-        // Prepare relational assets for bulk insert
-        imageUrls.forEach((url) => {
-          imageRecords.push({
-            url,
-            publicId: url.split('/').pop(),
-            canineId: pupId,
-          });
-        });
-        docUrls.forEach((url) => {
-          dnaRecords.push({
-            url,
-            name: `${pup.name} DNA Record`,
-            publicId: url.split('/').pop(),
-            canineId: pupId,
-          });
-        });
-      }
-
-      await tx.canine.createMany({ data: puppiesData });
-
-      if (imageRecords.length > 0) {
-        await tx.image.createMany({ data: imageRecords });
-      }
-      if (dnaRecords.length > 0) {
-        await tx.document.createMany({ data: dnaRecords });
       }
     }
     return litter;

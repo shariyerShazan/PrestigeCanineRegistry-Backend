@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { NotificationsGateway } from '../../notifications/notifications.gateway';
+import { PaymentService } from '../payment/payment.service';
 
 @Module({
   providers: [
@@ -14,7 +15,9 @@ import { NotificationsGateway } from '../../notifications/notifications.gateway'
     MailService,
     NotificationsService,
     NotificationsGateway,
+    PaymentService
   ],
   controllers: [OwnerTransferController],
+  exports: [OwnershipTransferService]
 })
 export class OwnerTransferModule {}
